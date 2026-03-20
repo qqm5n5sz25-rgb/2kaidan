@@ -1,0 +1,727 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<title>怪談生成器</title>
+<link href="https://fonts.googleapis.com/css2?family=Shippori+Mincho:wght@400;700&display=swap" rel="stylesheet">
+<style>
+:root{
+  --bg:#0a0705;--cp:#ffad5a;--ca:#ff6b1a;
+  --blood:#8b0000;--ink:#c8b89a;--dim:#7a6a55;
+}
+*{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent;}
+html,body{height:100%;background:var(--bg);color:var(--ink);
+  font-family:'Shippori Mincho','Hiragino Mincho ProN',serif;overflow-x:hidden;}
+
+/* ── 画面共通 ── */
+.screen{display:none;min-height:100vh;}
+.screen.active{display:flex;flex-direction:column;}
+
+/* ══ 入力画面 ══ */
+#screen-input{background:var(--bg);align-items:stretch;}
+.s-header{text-align:center;padding:52px 20px 28px;}
+.s-title{
+  font-size:clamp(1.7rem,8vw,2.8rem);font-weight:700;
+  letter-spacing:.3em;color:var(--cp);
+  text-shadow:0 0 40px rgba(255,107,26,.6),0 0 80px rgba(255,69,0,.3);
+  animation:titleFlicker 8s infinite;
+}
+.s-sub{font-size:.75rem;letter-spacing:.5em;color:var(--dim);margin-top:6px;}
+.input-card{
+  margin:0 16px 40px;
+  background:linear-gradient(135deg,#1a1108,#130e08);
+  border:1px solid rgba(200,184,154,.12);
+  border-radius:8px;padding:24px;
+  box-shadow:0 8px 60px rgba(0,0,0,.7);
+}
+.field-label{
+  font-size:.68rem;letter-spacing:.4em;color:var(--ca);
+  display:flex;align-items:center;gap:8px;margin-bottom:12px;
+}
+.field-label::after{content:'';flex:1;height:1px;background:linear-gradient(90deg,rgba(255,107,26,.3),transparent);}
+.apikey-input,.kw-input{
+  width:100%;padding:13px 14px;
+  background:rgba(0,0,0,.5);color:var(--ink);
+  border:1px solid rgba(200,184,154,.15);border-radius:6px;
+  font-family:inherit;font-size:.9rem;outline:none;-webkit-appearance:none;
+}
+.apikey-input{font-family:monospace;font-size:.78rem;}
+input::placeholder{color:rgba(122,106,85,.6);}
+.hint{font-size:.66rem;color:var(--dim);margin-top:6px;letter-spacing:.04em;line-height:1.6;}
+.divider{height:1px;background:rgba(200,184,154,.08);margin:20px 0;}
+.gen-btn{
+  width:100%;margin-top:20px;padding:17px;
+  background:linear-gradient(135deg,#5a0000,#8b0000 50%,#5a0000);
+  border:1px solid rgba(200,100,50,.4);border-radius:6px;
+  color:var(--cp);font-family:inherit;font-size:1rem;font-weight:700;
+  letter-spacing:.5em;text-shadow:0 0 20px rgba(255,107,26,.8);
+  cursor:pointer;-webkit-appearance:none;
+}
+.gen-btn:active{opacity:.7;}
+
+/* ══ ローディング画面 ══ */
+#screen-loading{background:rgba(5,3,2,.98);align-items:center;justify-content:center;padding:40px 20px;}
+.loading-title{font-size:.95rem;letter-spacing:.6em;color:var(--cp);margin-bottom:8px;}
+.loading-phase{font-size:.73rem;letter-spacing:.2em;color:var(--dim);margin-bottom:28px;min-height:1.5em;text-align:center;line-height:1.7;}
+.prog-wrap{width:260px;margin-bottom:8px;}
+.prog-track{height:3px;background:rgba(200,184,154,.1);border-radius:2px;overflow:hidden;}
+.prog-fill{height:100%;width:0%;background:linear-gradient(90deg,#8b0000,#ff6b1a);border-radius:2px;transition:width .6s ease;}
+.prog-pct{text-align:right;font-size:.7rem;color:var(--ca);margin-top:5px;}
+.step-list{display:flex;flex-direction:column;gap:8px;width:260px;margin-top:14px;}
+.step-item{display:flex;align-items:center;gap:10px;font-size:.7rem;letter-spacing:.12em;transition:all .4s;}
+.step-dot{width:6px;height:6px;border-radius:50%;flex-shrink:0;transition:all .4s;}
+
+/* ══ 怪談表示画面 ══ */
+#screen-story{background:var(--bg);}
+.story-card{
+  margin:0 16px 40px;
+  background:linear-gradient(135deg,#140e08,#0f0a06);
+  border:1px solid rgba(200,184,154,.1);
+  border-radius:8px;padding:28px 24px;
+  position:relative;overflow:hidden;
+}
+.story-card::before{
+  content:'';position:absolute;top:0;left:0;
+  width:3px;height:100%;
+  background:linear-gradient(180deg,transparent,#8b0000,transparent);
+}
+.story-title{font-size:1.15rem;font-weight:700;color:var(--cp);letter-spacing:.25em;margin-bottom:8px;}
+.story-meta{font-size:.65rem;color:var(--dim);letter-spacing:.15em;margin-bottom:20px;padding-bottom:14px;border-bottom:1px solid rgba(200,184,154,.08);}
+.story-body{font-size:.9rem;line-height:2.1;letter-spacing:.07em;color:var(--ink);white-space:pre-wrap;}
+.action-row{display:flex;gap:10px;margin-top:22px;flex-wrap:wrap;}
+.play-btn{
+  flex:1;min-width:120px;padding:13px 10px;
+  background:linear-gradient(135deg,#3a0000,#6b0000);
+  border:1px solid rgba(200,100,50,.4);border-radius:6px;
+  color:var(--cp);font-family:inherit;font-size:.78rem;font-weight:700;
+  letter-spacing:.3em;cursor:pointer;-webkit-appearance:none;
+}
+.play-btn:active{opacity:.7;}
+.sub-btn{
+  padding:13px 14px;background:none;
+  border:1px solid rgba(200,184,154,.2);border-radius:6px;
+  color:var(--dim);font-family:inherit;font-size:.75rem;
+  letter-spacing:.25em;cursor:pointer;-webkit-appearance:none;
+}
+.sub-btn:active{opacity:.6;}
+
+/* ══ プレイヤー画面 ══ */
+#screen-player{
+  background:#050302;
+  min-height:100vh;
+  display:none;
+  flex-direction:column;
+}
+#screen-player.active{display:flex;}
+
+/* タイトルバー */
+.player-header{
+  padding:max(48px,env(safe-area-inset-top)) 20px 16px;
+  text-align:center;
+  background:rgba(0,0,0,.6);
+  border-bottom:1px solid rgba(200,184,154,.07);
+}
+.player-header-title{
+  font-size:.8rem;color:var(--cp);letter-spacing:.3em;
+  text-shadow:0 0 20px rgba(255,107,26,.4);
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
+}
+
+/* 字幕エリア */
+.subtitle-area{
+  flex:1;display:flex;align-items:center;justify-content:center;
+  padding:24px 28px;
+  background:radial-gradient(ellipse at center,rgba(30,10,5,.9),rgba(5,3,2,1));
+  position:relative;
+}
+.subtitle-text{
+  font-size:clamp(1rem,5vw,1.4rem);
+  color:#f0dfc0;
+  text-align:center;
+  line-height:2;
+  letter-spacing:.12em;
+  text-shadow:0 0 40px rgba(255,200,100,.3),0 2px 8px rgba(0,0,0,.8);
+  max-width:600px;
+  transition:opacity .25s;
+}
+.subtitle-text.fade{opacity:0;}
+
+/* シーケンスバー */
+.seq-wrap{
+  padding:0 24px 12px;
+  background:rgba(5,3,2,.95);
+}
+.seq-info{
+  display:flex;justify-content:space-between;
+  font-size:.65rem;color:var(--dim);letter-spacing:.1em;
+  margin-bottom:8px;padding-top:10px;
+}
+.seq-track{
+  width:100%;height:4px;
+  background:rgba(200,184,154,.12);
+  border-radius:2px;overflow:hidden;
+  cursor:pointer;position:relative;
+}
+.seq-fill{
+  height:100%;width:0%;
+  background:linear-gradient(90deg,var(--blood),var(--ca));
+  border-radius:2px;transition:width .3s;
+  position:relative;
+}
+.seq-fill::after{
+  content:'';position:absolute;right:-4px;top:50%;
+  transform:translateY(-50%);
+  width:10px;height:10px;border-radius:50%;
+  background:var(--cp);
+  box-shadow:0 0 8px var(--ca);
+}
+
+/* コントロールバー */
+.ctrl-bar{
+  background:rgba(5,3,2,.98);
+  padding:14px 24px;
+  padding-bottom:max(20px,env(safe-area-inset-bottom));
+  display:flex;align-items:center;justify-content:space-between;
+  gap:12px;
+  border-top:1px solid rgba(200,184,154,.06);
+}
+.ctrl-side{display:flex;align-items:center;gap:10px;}
+
+/* ボタン共通 */
+.cb{
+  background:none;font-family:inherit;cursor:pointer;
+  -webkit-appearance:none;border:none;
+  display:flex;align-items:center;justify-content:center;
+  transition:opacity .15s;
+}
+.cb:active{opacity:.5;}
+
+/* 戻る・進む */
+.btn-skip{
+  width:42px;height:42px;border-radius:50%;
+  border:1px solid rgba(200,184,154,.2);
+  color:var(--ink);font-size:1rem;
+}
+/* 再生・一時停止 */
+.btn-play{
+  width:58px;height:58px;border-radius:50%;
+  background:linear-gradient(135deg,#5a0000,#8b0000);
+  border:2px solid rgba(200,100,50,.5);
+  color:var(--cp);font-size:1.4rem;
+  box-shadow:0 0 20px rgba(139,0,0,.5);
+}
+/* 終了 */
+.btn-end{
+  font-size:.68rem;letter-spacing:.25em;color:rgba(200,100,100,.7);
+  border:1px solid rgba(139,0,0,.4);
+  border-radius:4px;padding:8px 12px;
+}
+
+/* アニメーション */
+@keyframes titleFlicker{
+  0%,100%{opacity:1;}92%{opacity:1;}
+  93%{opacity:.5;}94%{opacity:1;}97%{opacity:.75;}98%{opacity:1;}
+}
+
+::-webkit-scrollbar{width:3px;}
+::-webkit-scrollbar-thumb{background:rgba(200,184,154,.15);border-radius:2px;}
+</style>
+</head>
+<body>
+
+<!-- ══ 入力画面 ══ -->
+<div id="screen-input" class="screen active">
+  <div class="s-header">
+    <div class="s-title">怪　談　生　成　器</div>
+    <div class="s-sub">─ 闇 の 語 り 部 ─</div>
+  </div>
+  <div class="input-card">
+    <div class="field-label">Anthropic APIキー</div>
+    <input type="password" id="apikey" class="apikey-input"
+      placeholder="sk-ant-api03-..." autocomplete="off" autocorrect="off" spellcheck="false">
+    <div class="hint">取得：console.anthropic.com → API Keys</div>
+    <div class="divider"></div>
+    <div class="field-label">呪いのキーワード</div>
+    <input type="text" id="keyword" class="kw-input"
+      placeholder="例：古井戸、赤い着物、子守唄" autocorrect="off">
+    <div class="hint">怪談の題材となるキーワードを入力してください</div>
+    <button class="gen-btn" onclick="startGenerate()">▲ 怪談を紡ぐ ▲</button>
+    <div id="err-box" style="display:none;margin-top:14px;padding:12px 14px;
+      background:rgba(139,0,0,.3);border:1px solid rgba(200,50,50,.4);
+      border-radius:6px;font-size:.75rem;color:#ff9999;line-height:1.7;"></div>
+  </div>
+</div>
+
+<!-- ══ ローディング画面 ══ -->
+<div id="screen-loading" class="screen">
+  <p class="loading-title">怪 談 を 紡 い で い る</p>
+  <p class="loading-phase" id="loading-phase">AIが闇の中から物語を呼び起こしています…</p>
+  <div class="prog-wrap">
+    <div class="prog-track"><div class="prog-fill" id="prog-fill"></div></div>
+    <div class="prog-pct" id="prog-pct">0%</div>
+  </div>
+  <div class="step-list" id="step-list"></div>
+</div>
+
+<!-- ══ 怪談表示画面 ══ -->
+<div id="screen-story" class="screen">
+  <div class="s-header">
+    <div class="s-title" style="font-size:clamp(1.4rem,7vw,2.4rem)">怪　談　生　成　器</div>
+    <div class="s-sub">─ 闇 の 語 り 部 ─</div>
+  </div>
+  <div class="story-card">
+    <div class="story-title" id="story-title"></div>
+    <div class="story-meta"  id="story-meta"></div>
+    <div class="story-body"  id="story-body"></div>
+    <div class="action-row">
+      <button class="play-btn" onclick="startPlayer()">▶ 読み上げ</button>
+      <button class="sub-btn" onclick="copyStory()">コピー</button>
+      <button class="sub-btn" onclick="showScreen('screen-input')">再生成</button>
+    </div>
+  </div>
+</div>
+
+<!-- ══ プレイヤー画面 ══ -->
+<div id="screen-player" class="screen">
+  <!-- タイトル -->
+  <div class="player-header">
+    <div class="player-header-title" id="player-title">─</div>
+  </div>
+
+  <!-- 字幕 -->
+  <div class="subtitle-area">
+    <div class="subtitle-text" id="subtitle-text">　</div>
+  </div>
+
+  <!-- シーケンスバー -->
+  <div class="seq-wrap">
+    <div class="seq-info">
+      <span id="seq-cur">0 / 0</span>
+      <span id="seq-pct-label">0%</span>
+    </div>
+    <div class="seq-track" id="seq-track" onclick="onSeekClick(event)">
+      <div class="seq-fill" id="seq-fill"></div>
+    </div>
+  </div>
+
+  <!-- コントロール -->
+  <div class="ctrl-bar">
+    <div class="ctrl-side">
+      <!-- 10文戻る -->
+      <button class="cb btn-skip" onclick="seekRel(-10)" title="10文戻る">⏮</button>
+    </div>
+
+    <!-- 再生 / 一時停止 -->
+    <button class="cb btn-play" id="btn-play" onclick="togglePause()">▶</button>
+
+    <div class="ctrl-side">
+      <!-- 10文進む -->
+      <button class="cb btn-skip" onclick="seekRel(10)" title="10文進む">⏭</button>
+      <!-- 終了 -->
+      <button class="cb btn-end" onclick="stopPlayer()">終了</button>
+    </div>
+  </div>
+</div>
+
+<script>
+'use strict';
+
+// ══════════════════════════════════════
+//  定数
+// ══════════════════════════════════════
+const STEPS = [
+  {pct:12, label:'キーワードを解析中',     phase:'AIがキーワードの怪異を読み解いています…'},
+  {pct:30, label:'怪異の舞台を設定中',     phase:'古の地に舞台を設けています…'},
+  {pct:52, label:'登場人物を召喚中',       phase:'幽世から人物を呼び出しています…'},
+  {pct:74, label:'恐怖の物語を紡ぐ中',    phase:'暗闇から言葉を紡いでいます…'},
+  {pct:92, label:'読み仮名を付けています', phase:'怪しの言葉に魂を吹き込んでいます…'},
+];
+
+// ══════════════════════════════════════
+//  画面管理
+// ══════════════════════════════════════
+function showScreen(id) {
+  document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
+  document.getElementById(id).classList.add('active');
+  window.scrollTo(0, 0);
+}
+
+// ══════════════════════════════════════
+//  プログレス
+// ══════════════════════════════════════
+let progTimer = null;
+
+function buildStepList() {
+  const list = document.getElementById('step-list');
+  list.innerHTML = '';
+  STEPS.forEach((s, i) => {
+    const d = document.createElement('div');
+    d.className = 'step-item'; d.id = 'step-' + i;
+    d.style.cssText = 'opacity:.3;color:#7a6a55;';
+    d.innerHTML = `<div class="step-dot" id="dot-${i}" style="background:rgba(200,184,154,.2)"></div>${s.label}`;
+    list.appendChild(d);
+  });
+}
+
+function startProgress() {
+  updateBar(0); buildStepList();
+  document.getElementById('loading-phase').textContent = 'AIが闇の中から物語を呼び起こしています…';
+  let elapsed = 0;
+  progTimer = setInterval(() => {
+    elapsed += 0.3;
+    const eased = Math.round(92 * (1 - Math.pow(1 - Math.min(1, elapsed / 30), 1.6)));
+    updateBar(eased);
+    let ns = -1;
+    for (let i = STEPS.length - 1; i >= 0; i--) { if (eased >= STEPS[i].pct) { ns = i; break; } }
+    updateSteps(ns);
+  }, 300);
+}
+
+function updateBar(p) {
+  document.getElementById('prog-fill').style.width = p + '%';
+  document.getElementById('prog-pct').textContent = p + '%';
+}
+
+function updateSteps(a) {
+  STEPS.forEach((s, i) => {
+    const el  = document.getElementById('step-' + i);
+    const dot = document.getElementById('dot-' + i);
+    if (!el) return;
+    if (i < a) {
+      el.style.cssText  = 'opacity:1;color:#c8b89a;';
+      dot.style.cssText = 'background:#7de8a8;';
+    } else if (i === a) {
+      el.style.cssText  = 'opacity:1;color:#ffad5a;';
+      dot.style.cssText = 'background:#ff6b1a;box-shadow:0 0 6px #ff6b1a;';
+      document.getElementById('loading-phase').textContent = s.phase;
+    } else {
+      el.style.cssText  = 'opacity:.3;color:#7a6a55;';
+      dot.style.cssText = 'background:rgba(200,184,154,.2);';
+    }
+  });
+}
+
+function stopProgress() {
+  clearInterval(progTimer);
+  updateBar(100); updateSteps(STEPS.length);
+  document.getElementById('loading-phase').textContent = '怪談の完成…';
+}
+
+// ══════════════════════════════════════
+//  ルビ処理（漢字{よみ} 形式）
+//  display: 漢字のまま表示
+//  speech:  よみに置換して読ませる
+// ══════════════════════════════════════
+function toDisplay(t){ return t.replace(/([^{}\s]+)\{([^}]+)\}/g, '$1'); }
+function toSpeech(t) { return t.replace(/([^{}\s]+)\{([^}]+)\}/g, '$2'); }
+
+// ══════════════════════════════════════
+//  文分割
+//  ポイント：display と speech を同じインデックスで管理する
+//  各セグメントに { display, speech, pause } を持たせる
+// ══════════════════════════════════════
+function buildSegments(rawBody) {
+  const segments = [];
+
+  // 段落に分割
+  const paragraphs = rawBody.split(/\n+/).filter(p => p.trim());
+
+  for (let pi = 0; pi < paragraphs.length; pi++) {
+    const para = paragraphs[pi];
+    const isLastPara = (pi === paragraphs.length - 1);
+
+    // 句点・感嘆符・疑問符・三点リーダーで分割（区切り文字を含めて分割）
+    const rawSegs = para.split(/(?<=[。！？…]+)/).map(s => s.trim()).filter(s => s);
+
+    for (let si = 0; si < rawSegs.length; si++) {
+      const raw = rawSegs[si];
+      const isLastSeg = (si === rawSegs.length - 1);
+
+      // 長い文（45文字超）は読点でさらに分割
+      if (raw.length > 45) {
+        const subs = raw.split(/(?<=、)/).map(s => s.trim()).filter(s => s);
+        for (let ki = 0; ki < subs.length; ki++) {
+          const sub = subs[ki];
+          const isLastSub = (ki === subs.length - 1);
+          const isPEnd = isLastSeg && isLastPara && isLastSub;
+          segments.push({
+            display: toDisplay(sub),
+            speech:  toSpeech(sub),
+            pause:   calcPause(sub, isPEnd || (isLastSub && isLastSeg)),
+          });
+        }
+      } else {
+        const isPEnd = isLastSeg && isLastPara;
+        segments.push({
+          display: toDisplay(raw),
+          speech:  toSpeech(raw),
+          pause:   calcPause(raw, isPEnd || isLastSeg),
+        });
+      }
+    }
+  }
+
+  return segments;
+}
+
+function calcPause(text, isEnd) {
+  let ms = 300;
+  if (/[。]$/.test(text))      ms = 700;
+  else if (/[…]+$/.test(text)) ms = 1000;
+  else if (/[！？]$/.test(text)) ms = 600;
+  else if (/[、]$/.test(text)) ms = 220;
+  if (isEnd) ms += 700;
+  // ±100ms のゆらぎ
+  return ms + (Math.random() * 200 - 100);
+}
+
+// ══════════════════════════════════════
+//  怪談生成
+// ══════════════════════════════════════
+let savedTitle    = '';
+let savedSegments = [];  // { display, speech, pause }[]
+let savedDisplay  = '';  // 表示用テキスト（漢字）
+
+async function startGenerate() {
+  const apiKey  = document.getElementById('apikey').value.trim();
+  const keyword = document.getElementById('keyword').value.trim();
+  if (!apiKey)  { alert('APIキーを入力してください'); return; }
+  if (!keyword) { alert('キーワードを入力してください'); return; }
+
+  document.getElementById('err-box').style.display = 'none';
+  showScreen('screen-loading');
+  startProgress();
+
+  try {
+    const res = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-api-key': apiKey,
+        'anthropic-version': '2023-06-01',
+        'anthropic-dangerous-direct-browser-access': 'true',
+      },
+      body: JSON.stringify({
+        model: 'claude-sonnet-4-5',
+        max_tokens: 5000,
+        system: `あなたは日本の伝統的な怪談師です。江戸・明治時代の雰囲気をもつ昔話調の怪談話を創作します。
+
+【ルール】
+- 文体は昔話調（「むかし、むかし」「〜でございます」「〜という話でございます」など）
+- 4000〜5000文字程度
+- 登場人物には古風な和名をつける
+- 後味の悪い結末、怪異の正体は曖昧に
+- 読み間違い防止のため、難読漢字・固有名詞には「漢字{よみ}」形式でルビを振ること
+  例：古井戸{ふるいど}、怪異{かいい}、祟り{たたり}、魂魄{こんぱく}、彼岸{ひがん}、憑依{ひょうい}
+- 一度ルビを振った語は以降も同じ読みで統一すること
+
+最初の行に「タイトル：〇〇〇〇」と書き、空行の後に本文を書いてください。`,
+        messages: [{
+          role: 'user',
+          content: `キーワード：${keyword}\n\nこのキーワードから着想を得て怪談を書いてください。`,
+        }],
+      }),
+    });
+
+    const data = await res.json();
+    const raw  = data?.content?.[0]?.text;
+    if (!raw) throw new Error(data?.error?.message || 'レスポンスが空 status:' + res.status);
+
+    // タイトル抽出
+    const lines = raw.split('\n');
+    let title = '名無しの怪談', bs = 0;
+    for (let i = 0; i < Math.min(4, lines.length); i++) {
+      if (/^タイトル[：:]/.test(lines[i])) {
+        title = lines[i].replace(/^タイトル[：:]/, '').trim();
+        bs = i + 1; break;
+      }
+    }
+    while (bs < lines.length && !lines[bs].trim()) bs++;
+    const rawBody = lines.slice(bs).join('\n').trim();
+
+    savedTitle    = toDisplay(title);
+    savedSegments = buildSegments(rawBody);
+    savedDisplay  = toDisplay(rawBody);
+
+    stopProgress();
+    setTimeout(() => {
+      document.getElementById('story-title').textContent = savedTitle;
+      document.getElementById('story-meta').textContent  =
+        `キーワード：${keyword}　│　約${savedDisplay.length}文字　│　${savedSegments.length}文`;
+      document.getElementById('story-body').textContent  = savedDisplay;
+      showScreen('screen-story');
+    }, 700);
+
+  } catch (err) {
+    stopProgress();
+    setTimeout(() => {
+      showScreen('screen-input');
+      const eb = document.getElementById('err-box');
+      eb.textContent  = '⚠ エラー：' + err.message;
+      eb.style.display = 'block';
+    }, 400);
+  }
+}
+
+// ══════════════════════════════════════
+//  読み上げ（字幕と完全同期）
+// ══════════════════════════════════════
+let segIdx    = 0;
+let isPaused  = false;
+let pauseTimer = null;
+
+function startPlayer() {
+  if (!savedSegments.length || !window.speechSynthesis) {
+    alert('音声読み上げに対応していません'); return;
+  }
+  window.speechSynthesis.cancel();
+  clearTimeout(pauseTimer);
+  segIdx = 0; isPaused = false;
+
+  document.getElementById('player-title').textContent = savedTitle;
+  updatePlayBtn();
+  showScreen('screen-player');
+
+  // iOS では少し待ってから開始
+  setTimeout(() => speakAt(0), 500);
+}
+
+function speakAt(idx) {
+  if (isPaused) return;
+  if (idx >= savedSegments.length) {
+    updateSubtitle('─ 語り終わりました ─');
+    updateSeq(savedSegments.length, savedSegments.length);
+    setTimeout(() => { showScreen('screen-story'); }, 3500);
+    return;
+  }
+
+  segIdx = idx;
+  const seg = savedSegments[idx];
+
+  // ── 字幕を先に表示 ──
+  updateSubtitle(seg.display);
+  updateSeq(idx + 1, savedSegments.length);
+
+  // ── 読み上げ ──
+  const utt = new SpeechSynthesisUtterance(seg.speech);
+  utt.lang   = 'ja-JP';
+  utt.rate   = 0.78;
+  utt.pitch  = 0.5;
+  utt.volume = 1.0;
+
+  // 声を選択（低い男性の声を優先）
+  const voices = window.speechSynthesis.getVoices();
+  const jp = voices.filter(v => v.lang.startsWith('ja'));
+  if (jp.length) {
+    utt.voice = jp.find(v => /男|otoya|ichiro|male/i.test(v.name))
+             || jp.find(v => v.default)
+             || jp[jp.length - 1];
+  }
+
+  utt.onend = () => {
+    if (isPaused) return;
+    // 句読点ごとのポーズを挟んで次へ
+    pauseTimer = setTimeout(() => speakAt(segIdx + 1), seg.pause);
+  };
+  utt.onerror = (e) => {
+    if (e.error !== 'interrupted') {
+      pauseTimer = setTimeout(() => speakAt(segIdx + 1), 300);
+    }
+  };
+
+  window.speechSynthesis.speak(utt);
+}
+
+// 字幕更新
+function updateSubtitle(text) {
+  const el = document.getElementById('subtitle-text');
+  el.classList.add('fade');
+  setTimeout(() => { el.textContent = text || '　'; el.classList.remove('fade'); }, 250);
+}
+
+// シーケンスバー更新
+function updateSeq(cur, total) {
+  const pct = total > 0 ? Math.round((cur / total) * 100) : 0;
+  document.getElementById('seq-fill').style.width  = pct + '%';
+  document.getElementById('seq-cur').textContent   = `${cur} / ${total}`;
+  document.getElementById('seq-pct-label').textContent = pct + '%';
+}
+
+// 再生ボタン表示更新
+function updatePlayBtn() {
+  document.getElementById('btn-play').textContent = isPaused ? '▶' : '⏸';
+}
+
+// 一時停止 / 再開
+function togglePause() {
+  if (isPaused) {
+    isPaused = false;
+    updatePlayBtn();
+    window.speechSynthesis.resume();
+    // resume が効かない場合（iOS）は再スタート
+    if (!window.speechSynthesis.speaking) {
+      speakAt(segIdx);
+    }
+  } else {
+    isPaused = true;
+    updatePlayBtn();
+    clearTimeout(pauseTimer);
+    window.speechSynthesis.pause();
+  }
+}
+
+// 相対スキップ（+n / -n 文）
+function seekRel(delta) {
+  window.speechSynthesis.cancel();
+  clearTimeout(pauseTimer);
+  const next = Math.max(0, Math.min(savedSegments.length - 1, segIdx + delta));
+  isPaused = false;
+  updatePlayBtn();
+  speakAt(next);
+}
+
+// シーケンスバークリックでジャンプ
+function onSeekClick(e) {
+  const rect = document.getElementById('seq-track').getBoundingClientRect();
+  const ratio = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width));
+  const target = Math.floor(ratio * savedSegments.length);
+  window.speechSynthesis.cancel();
+  clearTimeout(pauseTimer);
+  isPaused = false;
+  updatePlayBtn();
+  speakAt(target);
+}
+
+// 終了
+function stopPlayer() {
+  window.speechSynthesis.cancel();
+  clearTimeout(pauseTimer);
+  isPaused = false;
+  showScreen('screen-story');
+}
+
+// コピー
+function copyStory() {
+  const text = savedTitle + '\n\n' + savedDisplay;
+  if (navigator.clipboard) {
+    navigator.clipboard.writeText(text).then(() => alert('コピーしました'));
+  } else {
+    const ta = document.createElement('textarea');
+    ta.value = text; document.body.appendChild(ta);
+    ta.select(); document.execCommand('copy');
+    document.body.removeChild(ta); alert('コピーしました');
+  }
+}
+
+// iOS: 声リスト読み込み
+window.speechSynthesis.onvoiceschanged = () => window.speechSynthesis.getVoices();
+window.addEventListener('beforeunload', () => {
+  window.speechSynthesis.cancel();
+  clearTimeout(pauseTimer);
+});
+</script>
+</body>
+</html>
